@@ -10,7 +10,7 @@ I am Joey Gallegos - Software Engineer and Incident Response Analyst with experi
 🚀 Some of my main projects:
 - [DropboxCleanupScripts](https://github.com/joeygallegos/DropboxCleanupScripts) - A bunch of various python cleanup scripts for my Dropbox uploads. 
 - [PythonMonitorScript](https://github.com/joeygallegos/PythonMonitorScript) - Monitor websites using a JSON object and a cronjob
-- [Home Depot API Adapter](https://github.com/joeygallegos/Home-Depot-API-Adapter) - Reminders where you have to reply "all ok" or they don't stop
+- [Home Depot API Adapter](https://github.com/joeygallegos/Home-Depot-API-Adapter) - Get prices and product data for Home Depot items using the hydration API
 
 
 
