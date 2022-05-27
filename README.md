@@ -10,9 +10,9 @@ I am Joey Gallegos - Software Engineer and Incident Response Analyst with experi
 🚀 Some of my main projects:
 - [DropboxCleanupScripts](https://github.com/joeygallegos/DropboxCleanupScripts) - A bunch of various python cleanup scripts for my Dropbox uploads. 
 - [PythonMonitorScript](https://github.com/joeygallegos/PythonMonitorScript) - Monitor websites using a JSON object and a cronjob
-- [AllOk](https://github.com/joeygallegos/AllOk) - Reminders where you have to reply "all ok" or they don't stop
+- [Home Depot API Adapter](https://github.com/joeygallegos/Home-Depot-API-Adapter) - Reminders where you have to reply "all ok" or they don't stop
 
 
 
 
-⚙️ I don't maintain any open-source projects at this time
+⚙️ I don't contribute to any open-source projects at this time
