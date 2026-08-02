@@ -13,6 +13,7 @@
 * Avoid abstractions until the same pattern appears at least three times.
 * Do not add frameworks, libraries, or services without approval.
 * Explain risky, destructive, or behavior-changing work before implementing it.
+* Before editing code in this repository, read [PROJECT.md](./PROJECT.md) if it exists for project specific rules.
 
 ## Before Editing
 
