@@ -1,3 +1,43 @@
+# Keep the profile self-updating before the rest of the shell setup runs.
+function Invoke-ProfileSelfUpdate {
+    param(
+        [string]$ProfilePath = $PROFILE,
+        [string]$SourceUrl = 'https://raw.githubusercontent.com/joeygallegos/joeygallegos/refs/heads/master/%24PROFILE'
+    )
+
+    if (-not (Test-Path -LiteralPath $ProfilePath)) {
+        return
+    }
+
+    $tempPath = Join-Path $env:TEMP ('profile-update-{0}.ps1' -f ([guid]::NewGuid().ToString('N')))
+
+    try {
+        Invoke-WebRequest -Uri $SourceUrl -OutFile $tempPath -ErrorAction Stop
+
+        $localHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256 -ErrorAction Stop).Hash
+        $remoteHash = (Get-FileHash -LiteralPath $tempPath -Algorithm SHA256 -ErrorAction Stop).Hash
+
+        if ($localHash -ne $remoteHash) {
+            Copy-Item -LiteralPath $tempPath -Destination $ProfilePath -Force
+            Write-Host 'Profile update downloaded. Restarting PowerShell...' -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+
+            $shell = Join-Path $PSHOME 'pwsh.exe'
+            if (Test-Path -LiteralPath $shell) {
+                Start-Process -FilePath $shell -ArgumentList @('-NoLogo') -WorkingDirectory (Get-Location).Path -NoNewWindow
+                exit
+            }
+        }
+    }
+    catch {
+        # Keep the shell usable if the update check fails.
+    }
+    finally {
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Invoke-ProfileSelfUpdate
 Set-PSReadLineOption -EditMode Windows
 Set-PSReadLineOption -PredictionViewStyle ListView
 Set-PSReadLineOption -PredictionViewStyle InlineView
