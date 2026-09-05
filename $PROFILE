@@ -165,6 +165,27 @@ function ff {
 
 Set-Alias -Name fuckingfind -Value ff
 
+$keyBridgeScript = 'D:\Dropbox\Code\KeyBridge\connect.ps1'
+
+if (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf) {
+    function keybridge {
+        param(
+            [Parameter(ValueFromRemainingArguments = $true)]
+            [string[]]$Arguments
+        )
+
+        if (-not (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf)) {
+            Write-Error "KeyBridge script not found: $keyBridgeScript"
+            return
+        }
+
+        & $keyBridgeScript @Arguments
+    }
+
+    Set-Alias -Name kb -Value keybridge
+    Set-Alias -Name connect -Value keybridge
+}
+
 function New-StarLine {
     param(
         [int]$Width,
@@ -223,6 +244,10 @@ function Show-MOTD {
         @{ Cmd = "git status"; Desc = "repo state" },
         @{ Cmd = 'code $PROFILE'; Desc = "edit this motd" }
     )
+
+    if (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf) {
+        $commands += @{ Cmd = "connect"; Desc = "SSH via KeyBridge" }
+    }
 
     foreach ($item in $commands) {
         $left = $item.Cmd.PadRight($cmdWidth)
