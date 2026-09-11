@@ -1,68 +1,74 @@
 # Keep the profile self-updating before the rest of the shell setup runs.
 function Invoke-ProfileSelfUpdate {
     param(
+        # Defaults to the PowerShell profile currently being loaded.
         [string]$ProfilePath = $PROFILE,
+        # Raw GitHub source used when automatic updates are enabled.
         [string]$SourceUrl = 'https://raw.githubusercontent.com/joeygallegos/joeygallegos/refs/heads/master/%24PROFILE'
     )
-
+    # Do nothing when PowerShell has not created a local profile yet.
     if (-not (Test-Path -LiteralPath $ProfilePath)) {
         return
     }
-
+    # Download to a unique temporary file so the active profile is never partially replaced.
     $tempPath = Join-Path $env:TEMP ('profile-update-{0}.ps1' -f ([guid]::NewGuid().ToString('N')))
-
-    try {
-        Invoke-WebRequest -Uri $SourceUrl -OutFile $tempPath -ErrorAction Stop
-
-        $localHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256 -ErrorAction Stop).Hash
-        $remoteHash = (Get-FileHash -LiteralPath $tempPath -Algorithm SHA256 -ErrorAction Stop).Hash
-
-        if ($localHash -ne $remoteHash) {
-            Copy-Item -LiteralPath $tempPath -Destination $ProfilePath -Force
-            Write-Host 'Profile update downloaded. Restarting PowerShell...' -ForegroundColor Yellow
-            Start-Sleep -Seconds 2
-
-            $shell = Join-Path $PSHOME 'pwsh.exe'
-            if (Test-Path -LiteralPath $shell) {
-                Start-Process -FilePath $shell -ArgumentList @('-NoLogo') -WorkingDirectory (Get-Location).Path -NoNewWindow
-                exit
+    # Leave disabled unless this machine should check GitHub at every shell startup.
+    $checkForUpdate = $false
+    if ($checkForUpdate) {
+        try {
+            # Stop immediately on a download failure so the current profile remains usable.
+            Invoke-WebRequest -Uri $SourceUrl -OutFile $tempPath -ErrorAction Stop
+            # Compare file contents rather than timestamps before overwriting the profile.
+            $localHash = (Get-FileHash -LiteralPath $ProfilePath -Algorithm SHA256 -ErrorAction Stop).Hash
+            $remoteHash = (Get-FileHash -LiteralPath $tempPath -Algorithm SHA256 -ErrorAction Stop).Hash
+            if ($localHash -ne $remoteHash) {
+                Copy-Item -LiteralPath $tempPath -Destination $ProfilePath -Force
+                Write-Host 'Profile update downloaded. Restarting PowerShell...' -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+                # Prefer the current PowerShell installation when opening the refreshed session.
+                $shell = Join-Path $PSHOME 'pwsh.exe'
+                if (Test-Path -LiteralPath $shell) {
+                    Start-Process -FilePath $shell -ArgumentList @('-NoLogo') -WorkingDirectory (Get-Location).Path -NoNewWindow
+                    exit
+                }
             }
         }
-    }
-    catch {
-        # Keep the shell usable if the update check fails.
-    }
-    finally {
-        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        catch {
+            # Keep the shell usable if the update check fails.
+        }
+        finally {
+            # Remove the temporary download whether the update succeeded, failed, or was unnecessary.
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        }
     }
 }
-
+# Run the update check before loading tools and prompt customizations.
 Invoke-ProfileSelfUpdate
+# Use Windows-style editing and show command suggestions from history and installed plugins.
 Set-PSReadLineOption -EditMode Windows
 Set-PSReadLineOption -PredictionViewStyle ListView
 Set-PSReadLineOption -PredictionViewStyle InlineView
 Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+# Add file-type icons to terminal directory listings.
 Import-Module -Name Terminal-Icons
+# Initialize the configured Oh My Posh prompt for this shell session.
 oh-my-posh --init --shell pwsh --config D:\Dropbox\Console\ohmyposhconf.json | Invoke-Expression
-
 # Keep this near the end of your profile
 Invoke-Expression (& { (zoxide init powershell | Out-String) })
-
 function ff {
     param(
+        # Accept the folder name as the first positional argument: ff <folder>.
         [Parameter(Position = 0)]
         [string]$Query,
-
+        # Return the path instead of changing the current directory.
         [switch]$Print
     )
-
     if ([string]::IsNullOrWhiteSpace($Query)) {
         Write-Host "usage: ff <folder>"
         return
     }
-
+    # Normalize once so all matching is case-insensitive.
     $q = $Query.ToLower()
-
     # Limit search roots. Edit these to your real folders.
     $roots = @(
         "$HOME\Desktop",
@@ -72,17 +78,16 @@ function ff {
         "$HOME\repos",
         "$HOME\projects"
     ) | Where-Object { Test-Path $_ }
-
+    # Collect zoxide and filesystem results in a common shape for one ranking pass.
     $results = @()
-
     # 1) Recent-use ranking from zoxide
     if (Get-Command zoxide -ErrorAction SilentlyContinue) {
         try {
             $zMatches = zoxide query -l | Where-Object {
                 $_.ToLower() -like "*$q*"
             }
-
             foreach ($p in $zMatches) {
+                # zoxide may retain paths that no longer exist, so validate each entry.
                 if (Test-Path $p) {
                     $item = Get-Item $p -ErrorAction SilentlyContinue
                     $results += [pscustomobject]@{
@@ -95,14 +100,16 @@ function ff {
                 }
             }
         }
-        catch {}
+        catch {
+            # Treat an unavailable or misconfigured zoxide database as an optional feature.
+        }
     }
-
     # 2) Filesystem fallback, but only in useful roots
     foreach ($root in $roots) {
         try {
             Get-ChildItem -Path $root -Directory -Recurse -ErrorAction SilentlyContinue |
             Where-Object {
+                # Skip dependency, system, and metadata directories to keep the search useful and fast.
                 $_.Name.ToLower() -like "*$q*" -and
                 $_.FullName -notmatch '\\node_modules(\\|$)' -and
                 $_.FullName -notmatch '\\\.git(\\|$)' -and
@@ -117,6 +124,7 @@ function ff {
                 $_.FullName -notmatch '\\venv(\\|$)'
             } |
             Sort-Object LastWriteTime -Descending |
+            # Bound every root's contribution so broad searches remain responsive.
             Select-Object -First 100 |
             ForEach-Object {
                 $results += [pscustomobject]@{
@@ -128,21 +136,21 @@ function ff {
                 }
             }
         }
-        catch {}
+        catch {
+            # Continue with other roots if one is inaccessible or disappears during the scan.
+        }
     }
-
+    # Remove duplicate paths, then prefer exact names, zoxide matches, and recent folders.
     $ranked = $results |
     Sort-Object Path -Unique |
     Sort-Object `
     @{Expression = 'Exact'; Descending = $true }, `
     @{Expression = { $_.Source -eq 'zoxide' }; Descending = $true }, `
     @{Expression = 'ModifiedTime'; Descending = $true }
-
     if (-not $ranked) {
         Write-Host "no matches"
         return
     }
-
     # If fzf exists, pick interactively. Otherwise take the top result.
     if (Get-Command fzf -ErrorAction SilentlyContinue) {
         $chosen = $ranked.Path | fzf --height 40% --reverse --prompt "ff > "
@@ -150,48 +158,46 @@ function ff {
     else {
         $chosen = $ranked[0].Path
     }
-
     if (-not $chosen) {
         return
     }
-
     if ($Print) {
+        # Emit the selected path for use in pipelines or scripts.
         $chosen
     }
     else {
+        # Make interactive ff calls jump directly to the chosen folder.
         Set-Location $chosen
     }
 }
-
+# Keep the memorable command name as an alias for the folder finder.
 Set-Alias -Name fuckingfind -Value ff
-
+# Only expose KeyBridge commands when its script is present on this machine.
 $keyBridgeScript = 'D:\Dropbox\Code\KeyBridge\connect.ps1'
-
 if (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf) {
     function keybridge {
         param(
+            # Pass all supplied arguments through to the KeyBridge connection script unchanged.
             [Parameter(ValueFromRemainingArguments = $true)]
             [string[]]$Arguments
         )
-
         if (-not (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf)) {
             Write-Error "KeyBridge script not found: $keyBridgeScript"
             return
         }
-
+        # The call operator runs the external script with the original argument array.
         & $keyBridgeScript @Arguments
     }
-
+    # Provide short and descriptive names for the same KeyBridge command.
     Set-Alias -Name kb -Value keybridge
     Set-Alias -Name connect -Value keybridge
 }
-
 function New-StarLine {
     param(
         [int]$Width,
         [double]$Density = 0.08
     )
-
+    # Characters are sampled sparsely to create a simple star-field effect.
     $chars = @('.', '+', '*', "'", '`')
     $lineChars = for ($i = 0; $i -lt $Width; $i++) {
         if ((Get-Random -Minimum 0.0 -Maximum 1.0) -lt $Density) {
@@ -201,75 +207,67 @@ function New-StarLine {
             ' '
         }
     }
-
+    # Return one string so callers can write the complete visual line at once.
     -join $lineChars
 }
-
 function Show-MOTD {
+    # Redraw the terminal before displaying the startup dashboard.
     Clear-Host
-
+    # Named colors keep the sections visually consistent.
     $accent = "Cyan"
     $muted = "DarkGray"
     $good = "Green"
-
     $gold = "`e[38;2;255;215;0m"
     $reset = "`e[0m"
-
+    # Keep the title, border, and star field aligned to one shared width.
     $width = 46
     $title = "IN A TERMINAL FAR, FAR AWAY..."
     $border = "━" * $width
-
+    # Render the Star Wars-inspired header and surrounding star field.
     Write-Host "$gold$border$reset"
     Write-Host (New-StarLine -Width $width)
     Write-Host (New-StarLine -Width $width)
-
     Write-Host ($title.PadLeft(([math]::Floor(($width + $title.Length) / 2))).PadRight($width)) -ForegroundColor Yellow
-
     Write-Host (New-StarLine -Width $width)
     Write-Host (New-StarLine -Width $width)
     Write-Host "$gold$border$reset"
-
-    # System info
+    # Display a small snapshot of the current interactive session.
     Write-Host "`nSYSTEM" -ForegroundColor $accent
     Write-Host "  User : " -NoNewline; Write-Host "$env:USERNAME" -ForegroundColor $good
     Write-Host "  Host : " -NoNewline; Write-Host "$env:COMPUTERNAME" -ForegroundColor $good
     Write-Host "  Time : " -NoNewline; Write-Host "$(Get-Date -Format 'ddd, MMM d yyyy  →  h:mm tt')" -ForegroundColor $good
-
-    # Quick commands
+    # Display frequently used commands with aligned descriptions.
     Write-Host "`nCOMMANDS" -ForegroundColor $accent
-
     $cmdWidth = 18
     $commands = @(
         @{ Cmd = "ff <name>"; Desc = "jump to folder" },
         @{ Cmd = "git status"; Desc = "repo state" },
         @{ Cmd = 'code $PROFILE'; Desc = "edit this motd" }
     )
-
     if (Test-Path -LiteralPath $keyBridgeScript -PathType Leaf) {
+        # Advertise connect only when the corresponding command was registered above.
         $commands += @{ Cmd = "connect"; Desc = "SSH via KeyBridge" }
     }
-
     foreach ($item in $commands) {
+        # Pad command names so descriptions share a consistent column.
         $left = $item.Cmd.PadRight($cmdWidth)
         Write-Host "  $left" -NoNewline -ForegroundColor $good
         Write-Host "  →  $($item.Desc)" -ForegroundColor $muted
     }
-
     # Optional: recent dirs (clickable)
     if (Get-Command zoxide -ErrorAction SilentlyContinue) {
         Write-Host "`nRECENT  " -NoNewline -ForegroundColor $accent
         Write-Host "(Ctrl+Click to open)" -ForegroundColor $muted
-
         zoxide query -l | Select-Object -First 3 | ForEach-Object {
             $path = $_
+            # OSC 8 uses forward-slash file URIs for clickable terminal links.
             $uri = "file:///" + ($path -replace '\\', '/')
             $link = "`e]8;;$uri`e\$path`e]8;;`e\"
-
             Write-Host "  $link" -ForegroundColor $muted
         }
     }
-
+    # Finish the dashboard with a clean prompt line.
     Write-Host ""
 }
-
+# Display the startup dashboard after all optional commands have been registered.
 Show-MOTD
