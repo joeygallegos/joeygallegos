@@ -79,7 +79,7 @@ After the implementation is complete and tests pass:
 * Review only the code added or modified for this request.
 * Add thorough inline comments for the next developer.
 * Explain intent, business rules, assumptions, edge cases, security decisions, and non-obvious behavior.
-* Focus comments on why the code works this way, not what each line does.
+* Focus comments on why the code works this way and what each line does.
 * Do not add comments to unrelated or unchanged areas.
 * Do not comment obvious syntax or simple assignments.
 * Keep comments accurate, useful, and close to the relevant code.
