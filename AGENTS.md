@@ -34,6 +34,11 @@ Raise material concerns early. Do not block straightforward work over minor unce
 
 ## Implementation
 
+* Start by exploring and mapping the relevant territory:
+   - Identify entry points, core modules, and high-centrality components (files/functions with the most dependencies).
+   - Map data flows, call graphs, and architectural layers.
+   - Discover key abstractions, contracts/interfaces, and invariants that the codebase relies on.
+   - Note technology stack, patterns, conventions, and any existing architecture decision records.
 * Make one logical change at a time.
 * Keep diffs focused.
 * Do not modify unrelated files.
@@ -42,6 +47,9 @@ Raise material concerns early. Do not block straightforward work over minor unce
 * Use clear errors, labels, and instructions.
 * Keep the experience simple and understandable for corporate users.
 * Do not expose sensitive data in logs, errors, or UI messages.
+* If a change requires modifications outside the stated scope, you should flag the dependency and stop. Then ask before crossing the boundary.
+  - Awareness of a dependency ≠ obligation to resolve it.
+  - Improvise only when explicitly given freedom to do so.
 
 ## Dependencies
 
